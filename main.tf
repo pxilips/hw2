@@ -25,14 +25,24 @@ resource "aws_instance" "web" {
   tags = {
     Name = "HelloWorld"
 }
+
+ provisioner "file" {
+    content = "${templatefile("nginx.conf.tpl", {server_name = "${self.public_ip}"})}"
+    destination = "~/jenkins.conf"
+  }
+
+
 connection {
 	type     = "ssh"
 	user     = "centos"
 	private_key = file("centos_aws_ssh.pem")
 	host = "${self.public_ip}"
       }
+
+   
   provisioner "remote-exec" {
     inline = [
+	"sudo yum update -y",
 	 "sudo setenforce 0",
 	"sudo yum install epel-release -y",
 	"sudo yum install nginx -y",
@@ -40,16 +50,20 @@ connection {
       "sudo cp ~/nginx.repo /etc/yum.repos.d/nginx.repo",
       "sudo systemctl start nginx",
       "sudo systemctl enable nginx",
-	  
+	  	  
 	  "sudo yum install java-1.8.0-openjdk-devel -y",
 	  "curl --silent --location http://pkg.jenkins-ci.org/redhat-stable/jenkins.repo | sudo tee /etc/yum.repos.d/jenkins.repo",
 	  "sudo rpm --import https://jenkins-ci.org/redhat/jenkins-ci.org.key",
 	  "sudo yum install jenkins -y",
 	  "sudo systemctl start jenkins",
-	  "sudo systemctl enable jenkins"
-	  ]
-	}
+	  "sudo systemctl enable jenkins",
+	  "rm -f /etc/nginx/conf.d/default.conf",
+	  "sudo cp ~/jenkins.conf /etc/nginx/conf.d/jenkins.conf",
+	  "sudo service nginx restart"
+	   ]
+  	}
 }
+	
 
 
 resource "aws_security_group" "allow_ssh" {
@@ -64,11 +78,12 @@ cidr_blocks = ["0.0.0.0/0"]
 }
 
 ingress { 
-from_port = 8080 
-to_port = 8080 
+from_port = 80 
+to_port = 80 
 protocol = "tcp" 
 cidr_blocks = ["0.0.0.0/0"] 
 }
+
 
 egress { 
 from_port = 0 
